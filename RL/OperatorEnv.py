@@ -1,19 +1,29 @@
 import gymnasium as gym
+import numpy as np
 
-class FlinkEnvironment(gym.Env):
-    def __init__(self, num_operators):
-        self.num_operators = num_operators
+class OperatorEnv(gym.Env):
+    """
+    逻辑算子的gym环境
+    """
+    def __init__(self):
         self.action_space = gym.spaces.Discrete(3)  # -1：缩小 0: 不调整, 1: 增加
         self.observation_space = gym.spaces.Discrete(10)  # 状态离散化为 10 个整数
         self.state = None
         
-    def reset(self):
-        initial_busy_time = np.random.uniform(0.0, 1000.0, size=self.num_operators)  # 随机初始化状态
+    def reset(self,operator):
+        self.operator = operator
+        self.operator.mutex.acquire() 
+        initial_busy_time = self.operator.get_busy_time() 
+        self.operator.mutex.release()
         self.state = self._discretize_state(initial_busy_time)
         return self.state
     
     def step(self, action):
-        new_busy_time = float(input())#np.random.uniform(0.0, 1000.0, size=self.num_operators)  # 暂时假设新状态与当前状态相同
+        self.operator.rescale(action)
+        self.operator.mutex.acquire() 
+        new_busy_time = self.operator.get_busy_time()
+        self.operator.mutex.release()
+
         new_state = self._discretize_state(new_busy_time)
         reward = self._calculate_reward(new_busy_time)  # 根据新状态计算奖励
         done = False  # 暂时假设不终止
@@ -29,4 +39,5 @@ class FlinkEnvironment(gym.Env):
         # 需要根据问题的实际情况来定义奖励函数
         if busy_time < 700.0:
             return 1
-        return 0  # 暂时假设奖励为零
+        if busy_time >= 700.0:
+            return -1
